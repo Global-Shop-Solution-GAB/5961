@@ -1,0 +1,154 @@
+Program.Sub.ScreenSU.Start
+Gui.fLogin..Create
+Gui.fLogin..Caption("Validate GSS User PW")
+Gui.fLogin..Size(4395,1965)
+Gui.fLogin..MinX(0)
+Gui.fLogin..MinY(0)
+Gui.fLogin..Position(0,0)
+Gui.fLogin..BackColor(-2147483633)
+Gui.fLogin..MousePointer(0)
+Gui.fLogin..Event(UnLoad,cmdSignIn_Click)
+Gui.fLogin.lbl2.Create(Label,"Password : ",True,1605,255,0,270,375,True,0,"Arial",12,-2147483633,0)
+Gui.fLogin.txtPassword.Create(TextBox,"",True,1680,360,0,2130,255,True,0,"Arial",12,-2147483643,1)
+Gui.fLogin.txtPassword.PasswordChar("***********")
+Gui.fLogin.cmdSignIn.Create(Button)
+Gui.fLogin.cmdSignIn.Size(3555,450)
+Gui.fLogin.cmdSignIn.Position(270,795)
+Gui.fLogin.cmdSignIn.Caption("Sign In")
+Gui.fLogin.cmdSignIn.FontSize(12)
+Gui.fLogin.cmdSignIn.Event(Click,cmdSignIn_Click)
+Gui.fLogin.lblPassWord.Create(Label,"!",False,240,330,0,3870,660,True,0,"Arial",12,-2147483633,0)
+Gui.fLogin.lblPassWord.ForeColor(255)
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+'programmed by bls
+'program for Tranos Contracting to allow changing vendor approval flag and date in vendor master > options 
+'only if GS user is a member of group APPSUPLR
+'hooks 14501,14502 and 14461
+
+
+F.Intrinsic.Control.Try
+V.Local.sError.Declare
+Variable.Local.sUserGroups.Declare(String)
+Variable.Local.bChk.Declare(Boolean)
+
+f.Intrinsic.Control.If(v.Caller.Hook,=,14501)
+	'write values of approved vendor and date to text file
+	V.Local.sFile.Declare(String)
+	V.Local.sText.Declare(String)
+	V.Local.bExists.Declare(Boolean)
+	V.Local.sSql.Declare(String)
+	V.Local.sbegstatus.Declare(String)
+	v.Local.sbegdate.Declare(date)
+		
+	'lookup supplier approval and date status
+	F.ODBC.Connection!con.OpenConnection(V.Ambient.PDSN,V.Ambient.PUser,V.Ambient.PPass,600)
+	F.Intrinsic.String.Build("SELECT APPROVED_SUPPL,APPROVED_SUP_DT FROM V_VENDOR_ADDL WHERE VENDOR = '{0}'",v.Passed.global.Trim,V.Local.sSql)
+	F.ODBC.Connection!con.OpenRecordsetRO("rst",V.Local.sSql)	
+	F.Intrinsic.Control.If(V.ODBC.Con!rst.EOF,<>,True)
+	v.Local.sbegstatus.Set(V.ODBC.con!rst.FieldValTrim!approved_suppl)
+	v.Local.sbegdate.Set(V.ODBC.con!rst.FieldValTrim!approved_sup_dt)
+	F.Intrinsic.Control.endif
+	F.ODBC.Connection!con.Close
+	
+	F.Intrinsic.String.Concat(V.Caller.FilesDir,"\vendoroptions",V.Caller.Terminal,".txt",V.Local.sFile)
+	F.Intrinsic.String.Concat(v.Local.sbegstatus,"*!*",V.Local.sbegdate,V.Local.sText)
+	F.Intrinsic.File.String2File(V.Local.sFile,V.Local.sText)
+	
+	'validate user for supplier approved box
+	F.Intrinsic.UI.ChangeCallerProperty(V.Passed.000027,"LOCK",1)
+	F.Intrinsic.Control.If(V.Caller.User.Trim,=,"APPSUPLR")
+		F.Intrinsic.UI.ChangeCallerProperty(V.Passed.000027,"LOCK",0)
+	F.Intrinsic.Control.Else
+		F.Global.Security.GetUserGroups(V.Caller.User.Trim,V.Local.sUserGroups)
+		F.Intrinsic.String.IsInString(V.Local.sUserGroups,"APPSUPLR",0,V.Local.bChk)
+		F.Intrinsic.Control.If(V.Local.bChk,=,True)
+			F.Intrinsic.UI.ChangeCallerProperty(V.Passed.000027,"LOCK",0)
+		F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.EndIf
+	'validate user for supplier approved date
+	F.Intrinsic.UI.ChangeCallerProperty(V.Passed.000028,"LOCK",1)
+	F.Intrinsic.Control.If(V.Caller.User.Trim,=,"APPSUPLR")
+		F.Intrinsic.UI.ChangeCallerProperty(V.Passed.000028,"LOCK",0)
+	F.Intrinsic.Control.Else
+		F.Global.Security.GetUserGroups(V.Caller.User.Trim,V.Local.sUserGroups)
+		F.Intrinsic.String.IsInString(V.Local.sUserGroups,"APPSUPLR",0,V.Local.bChk)
+		F.Intrinsic.Control.If(V.Local.bChk,=,True)
+			F.Intrinsic.UI.ChangeCallerProperty(V.Passed.000028,"LOCK",0)
+		F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.EndIf
+
+'Save button
+f.Intrinsic.Control.ElseIf(v.Caller.Hook,=,14502)	
+	F.Global.Security.GetUserGroups(V.Caller.User.Trim,V.Local.sUserGroups)
+	F.Intrinsic.String.IsInString(V.Local.sUserGroups,"APPSUPLR",0,V.Local.bChk)
+	F.Intrinsic.Control.If(V.Local.bChk,=,True)
+		v.Local.senddate.Declare(string)	
+		f.Intrinsic.Date.ConvertDString(v.Passed.000028,"MM/DD/YY",V.Local.senddate)	
+		F.Intrinsic.String.Concat(V.Caller.FilesDir,"\vendoroptions",V.Caller.Terminal,".txt",V.Local.sFile)
+		F.Intrinsic.File.Exists(V.Local.sFile,V.Local.bExists)
+		F.Intrinsic.Control.If(V.Local.bExists,=,True)
+			F.Intrinsic.File.File2String(V.Local.sFile,V.Local.sText)
+			F.Intrinsic.String.Split(V.Local.sText,"*!*",V.Local.sText)
+			f.Intrinsic.Date.ConvertDString(v.Local.sText(1),"MM/DD/YYYY",V.Local.sbegdate)		
+			f.Intrinsic.Control.If(V.Local.sText(0).trim,<>,v.Passed.000027)
+				gui.fLogin..Show
+			f.Intrinsic.Control.ElseIf(v.Local.sbegdate,<>,v.Local.senddate)
+				gui.fLogin..Show
+			f.Intrinsic.Control.Else
+				f.Intrinsic.Control.End
+			f.Intrinsic.Control.EndIf		
+		f.Intrinsic.Control.EndIf
+	f.Intrinsic.Control.EndIf
+
+f.Intrinsic.Control.ElseIf(v.Caller.Hook,=,14461)
+	v.Passed.global.Set(v.Passed.000002)
+f.Intrinsic.Control.EndIf
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.Main.End
+
+Program.Sub.cmdSignIn_Click.Start
+F.Intrinsic.Control.Try
+V.Local.sError.Declare
+v.Local.sFilter.Declare
+v.Local.sPass.Declare
+v.Local.sUser.Declare
+v.Local.bLogin.Declare
+gui.fLogin..Enabled(False)
+v.Local.sPass.Set(v.Screen.fLogin!txtPassword.text)
+
+f.Global.Security.ValidateUser(v.Caller.CompanyCode,V.Caller.User,v.Local.sPass,v.Local.bLogin)
+f.Intrinsic.Control.If(v.Local.bLogin)
+	gui.fLogin.lblPassWord.Visible(False)
+	gui.fLogin..Visible(False)
+	f.Intrinsic.Control.End
+f.Intrinsic.control.Else
+	f.Intrinsic.UI.Msgbox("Password is Incorrect. Please enter a Valid Password.")
+	gui.fLogin.lblPassWord.Visible(False)
+	gui.fLogin..Visible(False)
+	v.Passed.777777.Set(1)
+	f.Intrinsic.Control.ExitSub
+f.Intrinsic.Control.EndIf
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}",V.Ambient.ScriptPath,V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Ambient.GABVersion,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.cmdSignIn_Click.End
+
+Program.Sub.fLogin_UnLoad.Start
+f.Intrinsic.Control.End
+Program.Sub.fLogin_UnLoad.End
+
+Program.Sub.Comments.Start
+${$5$}$3.0.0.0$}$1
+${$6$}$bstevens$}$20200427082025864$}$3Pg7+K2MGztoXyjxMVZqWaM5g3GOUsSN7lkaytOfewu1JEpeOcGipzqFw2fpqjmtCeN427IfwO/aqs4q52bJnQ==
+Program.Sub.Comments.End
